@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>2D Wave PINN · Portfolio Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Plotly.js for 3D surface -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top navigation / branding -->
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-mark">AB</div>
+        <div class="brand-text">
+          <span class="brand-name">Avery Bradley</span>
+          <span class="brand-tagline">Applied Math · ML Engineering</span>
+        </div>
+      </div>
+      <nav class="site-nav">
+        <a href="#top">Demo</a>
+        <a href="#overview">Overview</a>
+        <a href="#methods">Methods</a>
+        <a href="#results">Results</a>
+      </nav>
+    </header>
+
+    <!-- Hero + main visualization -->
+    <main class="main-content" id="top">
+      <section class="hero">
+        <div class="hero-text">
+          <div class="eyebrow">Physics-Informed Neural Networks · PDEs · Visualization</div>
+          <h1 class="hero-title">
+            2D Wave Equation<br />
+            <span class="hero-highlight">PINN vs Finite Difference</span>
+          </h1>
+          <p class="hero-description">
+            A physics-informed neural network (PINN) learns the dynamics of a
+            2D wave on a square “ocean patch,” and is validated against a
+            classical finite-difference solver. Use the interactive viewer to
+            explore the wave field across space and time.
+          </p>
+
+          <div class="hero-badges">
+            <span class="badge badge-pill">PyTorch</span>
+            <span class="badge badge-pill">Numerical PDEs</span>
+            <span class="badge badge-pill">Plotly.js</span>
+            <span class="badge badge-pill">Scientific Computing</span>
+          </div>
+
+          <div class="hero-actions">
+            <!-- Replace hrefs with your real links -->
+            <a class="btn btn-primary" href="https://github.com/" target="_blank" rel="noreferrer">
+              View Code on GitHub
+            </a>
+            <a class="btn btn-ghost" href="#overview">
+              Read the Project Overview
+            </a>
+          </div>
+
+          <div class="hero-meta">
+            <div class="meta-item">
+              <span class="meta-label">Domain</span>
+              <span class="meta-value">2D Wave PDE</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Training Signal</span>
+              <span class="meta-value">PDE + IC + BC</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Comparison</span>
+              <span class="meta-value">PINN vs FD baseline</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visualization panel -->
+        <div class="hero-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Interactive Wave Viewer</h2>
+              <p class="panel-subtitle">
+                Scrub through time, switch between solvers,
+                and inspect the learned dynamics.
+              </p>
+            </div>
+            <span class="panel-chip">Live Demo</span>
+          </div>
+
+          <div class="control-bar">
+            <div class="control-group">
+              <label for="modeSelect">Field:</label>
+              <select id="modeSelect">
+                <option value="fd">Finite Difference</option>
+                <option value="pinn">PINN</option>
+                <option value="error">Error (PINN − FD)</option>
+              </select>
+            </div>
+
+            <div class="control-group control-slider">
+              <label for="timeSlider">
+                Time
+                <span id="timeLabel" class="time-label">t = 0.000</span>
+              </label>
+              <input
+                type="range"
+                id="timeSlider"
+                min="0"
+                max="0"
+                step="1"
+                value="0"
+              />
+            </div>
+
+            <div class="control-group">
+              <button id="playButton" class="btn-play">▶ Play</button>
+            </div>
+          </div>
+
+          <div id="plot" class="plot-container"></div>
+
+          <div class="panel-footer">
+            <div class="legend">
+              <span class="legend-dot legend-fd"></span> FD baseline
+              <span class="legend-dot legend-pinn"></span> PINN prediction
+              <span class="legend-dot legend-error"></span> Error field
+            </div>
+            <div id="frameInfo" class="frame-info">
+              Loaded frames: <span id="frameCount">–</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Overview section -->
+      <section id="overview" class="section section-card">
+        <div class="section-header">
+          <h2>Project Overview</h2>
+          <p>
+            This project explores how Physics-Informed Neural Networks can learn
+            the dynamics of a partial differential equation when the governing
+            physics are known, and compares them to a classical numerical
+            solver.
+          </p>
+        </div>
+
+        <div class="section-grid">
+          <div class="section-block">
+            <h3>The PDE</h3>
+            <p>
+              We solve the 2D wave equation
+              <em>u<sub>tt</sub> = c² (u<sub>xx</sub> + u<sub>yy</sub>)</em>
+              on a 10 m × 10 m square domain <em>[0,10] × [0,10]</em>, with time
+              <em>t ∈ [0, T]</em>. The solution <em>u(t, x, y)</em> represents
+              the vertical displacement of the water surface.
+            </p>
+            <p>
+              The initial displacement is a Gaussian "bump" at the center of the
+              domain, mimicking a localized disturbance such as a stone dropped
+              into a still pond. Boundary values are clamped to zero, leading to
+              reflections at the edges.
+            </p>
+          </div>
+
+          <div class="section-block">
+            <h3>What the PINN learns</h3>
+            <p>
+              The PINN receives points in spacetime <em>(t, x, y)</em> as input
+              and outputs a scalar prediction <em>u(t, x, y)</em>. The loss
+              function enforces:
+            </p>
+            <ul>
+              <li>the wave equation residual in the interior,</li>
+              <li>the initial Gaussian profile at <em>t = 0</em>,</li>
+              <li>zero initial velocity, and</li>
+              <li>zero displacement on the domain boundary.</li>
+            </ul>
+            <p>
+              No ground-truth labels are provided in the interior; instead, the
+              PDE and boundary conditions act as the training signal.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      
+
+      <!-- Methods section -->
+      <section id="methods" class="section section-card">
+        <div class="section-header">
+          <h2>Methods</h2>
+          <p>
+            The project combines classical numerical methods with deep learning
+            to evaluate how well a neural network can approximate PDE
+            solutions when guided by the governing physics.
+          </p>
+        </div>
+
+        <div class="section-grid methods-grid">
+          <div class="section-block">
+            <h3>Finite Difference Baseline</h3>
+            <p>
+              The finite-difference (FD) solver uses a second-order scheme in
+              both space and time:
+            </p>
+            <ul>
+              <li>Central differences for spatial derivatives
+                  <em>u<sub>xx</sub>, u<sub>yy</sub></em>,</li>
+              <li>a leapfrog-style update for
+                  <em>u<sub>tt</sub></em>,</li>
+              <li>Dirichlet boundary conditions <em>u = 0</em> on all edges.</li>
+            </ul>
+            <p>
+              The FD solution serves as a numerical "ground truth" for
+              evaluating the PINN’s accuracy.
+            </p>
+          </div>
+
+          <div class="section-block">
+            <h3>Physics-Informed Neural Network</h3>
+            <p>
+              The PINN is implemented in PyTorch as a fully-connected network
+              with smooth <em>tanh</em> activations. Automatic differentiation
+              is used to compute time and spatial derivatives for the PDE
+              residual:
+            </p>
+            <p class="equation">
+              r<sub>θ</sub>(t, x, y) =
+              u<sub>tt</sub> − c² (u<sub>xx</sub> + u<sub>yy</sub>).
+            </p>
+            <p>
+              Training minimizes a weighted sum of interior residual, initial
+              displacement, initial velocity, and boundary losses.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results section -->
+      <section id="results" class="section section-card">
+        <div class="section-header">
+          <h2>Results & Interpretation</h2>
+          <p>
+            The interactive viewer shows how the PINN’s solution compares to
+            the FD baseline across the entire spacetime domain.
+          </p>
+        </div>
+
+        <div class="results-grid">
+          <div class="section-block">
+            <h3>Qualitative behavior</h3>
+            <p>
+              For a wide range of timesteps, the PINN closely tracks the radial
+              wavefronts and reflections at the boundaries. The global shape
+              and phase of the wave field are captured accurately, even though
+              the network never sees direct interior labels.
+            </p>
+          </div>
+
+          <div class="section-block">
+            <h3>Error structure</h3>
+            <p>
+              The error visualization highlights where the PINN struggles most,
+              typically near boundaries and at later times where waves have
+              reflected multiple times. This behavior is consistent with known
+              challenges in approximating long-time dynamics for PDEs.
+            </p>
+          </div>
+
+          <div class="section-block results-metrics">
+            <h3>Example metrics</h3>
+            <ul>
+              <li><strong>Mean squared error (space–time):</strong> fill-in</li>
+              <li><strong>Max absolute error:</strong> fill-in</li>
+              <li><strong>Grid size:</strong> fill-in</li>
+              <li><strong>Number of collocation points:</strong> fill-in</li>
+            </ul>
+            <p class="note">
+              Replace the placeholder values with metrics computed in your
+              evaluation script.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        &copy; <span id="year"></span> Avery Bradley ·
+        <span class="footer-sep">·</span>
+        Built with Python, PyTorch, and Plotly.js
+      </p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
