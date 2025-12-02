@@ -4,13 +4,18 @@
 
 const API_BASE = "https://wave-pinn-solver.onrender.com";
 
-// Plot state
+const Lx = 10.0;
+const Ly = 10.0;
+
+// Plot / grid state
 let plotInitialized = false;
 let Nx = 0;
 let Ny = 0;
+let xCoords = [];
+let yCoords = [];
 
 // ===========================================
-// API calls to backend FastAPI wave solver
+//  API calls to backend FastAPI wave solver
 // ===========================================
 
 async function apiReset() {
@@ -40,7 +45,6 @@ async function apiGetFrame() {
 //  PLOTTING HELPERS
 // =================================================
 
-// Build Plotly layout for 3D surface
 function getLayout() {
   return {
     title: "",
@@ -48,20 +52,23 @@ function getLayout() {
     margin: { l: 0, r: 0, t: 0, b: 0 },
     scene: {
       xaxis: {
-        title: "x",
+        title: "x (m)",
         backgroundcolor: "#020617",
         gridcolor: "#1f2933",
+        range: [0, Lx],
       },
       yaxis: {
-        title: "y",
+        title: "y (m)",
         backgroundcolor: "#020617",
         gridcolor: "#1f2933",
+        range: [0, Ly],
       },
       zaxis: {
         title: "u",
         backgroundcolor: "#020617",
         gridcolor: "#1f2933",
-        range: [-0.5, 0.5],
+        // tweak as needed depending on amplitude
+        range: [-0.1, 0.1],
       },
       aspectmode: "cube",
       aspectratio: { x: 1, y: 1, z: 0.5 },
@@ -71,34 +78,30 @@ function getLayout() {
   };
 }
 
-// =================================================
-//  INITIALIZE PLOTLY WITH FIRST FRAME
-// =================================================
-
+// Initialize Plotly using the first frame from the backend
 async function initializePlot() {
   console.log("Initializing backend simulation...");
 
   await apiReset();
-  const frame = await apiGetFrame();
+  const frame = await apiGetFrame(); // { time, u }
 
-  // Convert frame.u to Plotly-friendly structure
   const zData = frame.u;
-
   Nx = zData.length;
   Ny = zData[0].length;
 
-  const x = [...Array(Nx).keys()];
-  const y = [...Array(Ny).keys()];
+  // Physical coordinates to match backend domain [0, Lx], [0, Ly]
+  xCoords = Array.from({ length: Nx }, (_, i) => (Lx * i) / (Nx - 1));
+  yCoords = Array.from({ length: Ny }, (_, j) => (Ly * j) / (Ny - 1));
 
   const data = [
     {
       type: "surface",
-      x: x,
-      y: y,
+      x: xCoords,
+      y: yCoords,
       z: zData,
       colorscale: "Viridis",
       showscale: false,
-      hovertemplate: "x: %{x}<br>y: %{y}<br>u: %{z:.3f}<extra></extra>",
+      hovertemplate: "x: %{x:.2f}<br>y: %{y:.2f}<br>u: %{z:.3f}<extra></extra>",
     },
   ];
 
@@ -107,53 +110,55 @@ async function initializePlot() {
   Plotly.newPlot("plot", data, layout, { responsive: true }).then((gd) => {
     plotInitialized = true;
 
-    // ===========================
-    //    Click → drop pebble
-    // ===========================
+    // Click → drop pebble on backend
     gd.on("plotly_click", async (evt) => {
       const pt = evt.points[0];
       const x0 = pt.x;
       const y0 = pt.y;
 
       console.log("Dropping pebble at:", x0, y0);
-
-      await apiDrop(x0, y0, 0.02, 0.05);
+      try {
+        await apiDrop(x0, y0, 0.02, 0.05);
+      } catch (err) {
+        console.error("Error calling /drop:", err);
+      }
     });
   });
 }
 
-// =================================================
-//  LIVE ANIMATION LOOP
-// =================================================
+// Update plot with new z data from backend
+function updatePlotWithBackend(zData) {
+  const data = [
+    {
+      type: "surface",
+      x: xCoords,
+      y: yCoords,
+      z: zData,
+      colorscale: "Viridis",
+      showscale: false,
+    },
+  ];
 
+  Plotly.react("plot", data, getLayout(), { responsive: true });
+}
+
+// Continuous animation loop
 async function animateLoop() {
   if (!plotInitialized) {
     requestAnimationFrame(animateLoop);
     return;
   }
 
-  // Step simulation on backend
-  await apiStep(1);
+  try {
+    // Advance backend simulation
+    await apiStep(1); // try 2 or 3 for faster waves
 
-  // Get updated frame
-  const frame = await apiGetFrame();
-
-  // Update surface
-  Plotly.react(
-    "plot",
-    [
-      {
-        type: "surface",
-        x: [...Array(Nx).keys()],
-        y: [...Array(Ny).keys()],
-        z: frame.u,
-        colorscale: "Viridis",
-        showscale: false,
-      },
-    ],
-    getLayout(),
-    { responsive: true }
-  );
+    // Get new frame and update surface
+    const frame = await apiGetFrame();
+    updatePlotWithBackend(frame.u);
+  } catch (err) {
+    console.error("Error in animation loop:", err);
+  }
 
   requestAnimationFrame(animateLoop);
 }
@@ -164,5 +169,5 @@ async function animateLoop() {
 
 window.addEventListener("load", async () => {
   await initializePlot();
-  animateLoop(); // continuous animation
+  requestAnimationFrame(animateLoop);
 });
