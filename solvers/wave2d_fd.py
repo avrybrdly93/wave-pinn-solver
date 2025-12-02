@@ -1,72 +1,78 @@
 # solvers/wave2d_fd.py
-# Basic 2D wave equation finite difference solver
 import numpy as np
 
+class Wave2DSolver:
+    def __init__(self, nx=101, ny=101, c=1.0, Lx=10, Ly=10, dt=0.01):
+        self.nx = nx
+        self.ny = ny
+        self.c = c
+        self.Lx = Lx
+        self.Ly = Ly
+        self.dt = dt
 
-def solve_wave_2d(nx=101, ny=101, nt=600, c=1.0, Lx=10, Ly=10, T=3.0):
-    dx = Lx / (nx - 1)
-    dy = Ly / (ny - 1)
-    dt = T / (nt - 1)
+        self.dx = Lx / (nx - 1)
+        self.dy = Ly / (ny - 1)
 
-    # CFL condition (simple form)
-    assert c * dt / dx < 1 / np.sqrt(2), "CFL condition violated"
+        # CFL check
+        assert c * dt / self.dx < 1 / np.sqrt(2), "CFL condition violated"
 
-    x = np.linspace(0, Lx, nx)
-    y = np.linspace(0, Ly, ny)
-    t = np.linspace(0, T, nt)
+        self.x = np.linspace(0, Lx, nx)
+        self.y = np.linspace(0, Ly, ny)
+        self.X, self.Y = np.meshgrid(self.x, self.y, indexing="ij")
 
-    # Allocate arrays
-    u_prev = np.zeros((nx, ny))
-    u_curr = np.zeros((nx, ny))
-    u_next = np.zeros((nx, ny))
-    U = np.zeros((nt, nx, ny))
+        self.reset()
 
-    # Pebble drop: slight bump plus a short downward impulse at center
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    xc, yc = Lx / 2, Ly / 2
-    r2 = (X - xc) ** 2 + (Y - yc) ** 2
+    def reset(self):
+        """Reset wave to flat surface."""
+        self.u_prev = np.zeros((self.nx, self.ny))
+        self.u_curr = np.zeros((self.nx, self.ny))
+        self.u_next = np.zeros((self.nx, self.ny))
+        self.time = 0.0
 
-    sigma_disp = 0.15 * min(Lx, Ly)
-    A_disp = 0.05
-    u_curr = A_disp * np.exp(-r2 / sigma_disp**2)
+        self.cx = (self.c * self.dt / self.dx) ** 2
+        self.cy = (self.c * self.dt / self.dy) ** 2
 
-    sigma_vel = 0.10 * min(Lx, Ly)
-    A_vel = -1.5  # negative = downward push
-    u_t0 = A_vel * np.exp(-r2 / sigma_vel**2)
+    def drop_pebble(self, x0, y0, A=0.02, sigma=0.05):
+        """Add a Gaussian displacement bump."""
+        r2 = (self.X - x0) ** 2 + (self.Y - y0) ** 2
+        self.u_curr += A * np.exp(-r2 / sigma**2)
 
-    # Backward step: u(t - dt) ≈ u(0) - dt * u_t(0)
-    u_prev = u_curr - dt * u_t0
+    def step(self):
+        """Advance simulation by one time step using finite differences."""
+        u = self.u_curr
+        u_prev = self.u_prev
+        u_next = self.u_next
 
-    U[0] = u_curr.copy()
+        # Vectorized interior update
+        u_next[1:-1, 1:-1] = (
+            2 * u[1:-1, 1:-1]
+            - u_prev[1:-1, 1:-1]
+            + self.cx * (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1])
+            + self.cy * (u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2])
+        )
 
-    # Time stepping
-    cx = (c * dt / dx) ** 2
-    cy = (c * dt / dy) ** 2
-
-    for n in range(1, nt):
-        for i in range(1, nx - 1):
-            for j in range(1, ny - 1):
-                u_next[i, j] = (
-                    2 * u_curr[i, j]
-                    - u_prev[i, j]
-                    + cx * (u_curr[i + 1, j] - 2 * u_curr[i, j] + u_curr[i - 1, j])
-                    + cy * (u_curr[i, j + 1] - 2 * u_curr[i, j] + u_curr[i, j - 1])
-                )
-
-        # Enforce boundary conditions u=0
+        # Boundary conditions (fixed edges)
         u_next[0, :] = 0
         u_next[-1, :] = 0
         u_next[:, 0] = 0
         u_next[:, -1] = 0
 
-        U[n] = u_next.copy()
+        # Rotate buffers
+        self.u_prev, self.u_curr, self.u_next = (
+            self.u_curr,
+            self.u_next,
+            self.u_prev,
+        )
 
-        # advance time levels
-        u_prev, u_curr, u_next = u_curr, u_next, u_prev
+        self.time += self.dt
 
-    return t, x, y, U
+    def frame(self):
+        """Return current height field as a Python list (JSON serializable)."""
+        return {
+            "time": self.time,
+            "u": self.u_curr.tolist(),
+        }
 
 
-if __name__ == "__main__":
-    t, x, y, U = solve_wave_2d()
-    print("FD solver complete", U.shape)
+# Create global solver instance for FastAPI
+solver = Wave2DSolver()
