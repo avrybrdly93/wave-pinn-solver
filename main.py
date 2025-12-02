@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.solver import solver
+from solvers.wave2d_fd import solver
 
 app = FastAPI(title="Wave Simulation Backend")
 
