@@ -22,8 +22,18 @@ class Wave2DSolver:
 
         self.reset()
 
+    # def reset(self):
+    #     """Reset wave to flat surface."""
+    #     self.u_prev = np.zeros((self.nx, self.ny))
+    #     self.u_curr = np.zeros((self.nx, self.ny))
+    #     self.u_next = np.zeros((self.nx, self.ny))
+    #     self.time = 0.0
+
+    #     self.cx = (self.c * self.dt / self.dx) ** 2
+    #     self.cy = (self.c * self.dt / self.dy) ** 2
+
     def reset(self):
-        """Reset wave to flat surface."""
+        """Reset wave to flat surface and drop an initial pebble."""
         self.u_prev = np.zeros((self.nx, self.ny))
         self.u_curr = np.zeros((self.nx, self.ny))
         self.u_next = np.zeros((self.nx, self.ny))
@@ -31,6 +41,12 @@ class Wave2DSolver:
 
         self.cx = (self.c * self.dt / self.dx) ** 2
         self.cy = (self.c * self.dt / self.dy) ** 2
+
+        # 🔹 Add an initial Gaussian bump in the center
+        x0 = self.Lx / 2
+        y0 = self.Ly / 2
+        self.drop_pebble(x0, y0, A=0.02, sigma=0.5)
+
 
     def drop_pebble(self, x0, y0, A=0.02, sigma=0.05):
         """Add a Gaussian displacement bump."""
@@ -72,6 +88,13 @@ class Wave2DSolver:
             "time": self.time,
             "u": self.u_curr.tolist(),
         }
+        
+    def laplacian(u, dx, dy):
+        return (
+            (np.roll(u, +1, axis=0) - 2*u + np.roll(u, -1, axis=0)) / dx**2 +
+            (np.roll(u, +1, axis=1) - 2*u + np.roll(u, -1, axis=1)) / dy**2
+        )
+
 
 
 # Create global solver instance for FastAPI
