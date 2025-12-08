@@ -15,6 +15,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://avrybrdly93.github.io"
     ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
